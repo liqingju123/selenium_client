@@ -45,146 +45,152 @@ import java.util.Map;
 
 public class HttpCommandExecutor implements CommandExecutor, NeedsLocalLogs {
 
-  private static HttpClient.Factory defaultClientFactory;
+	private static HttpClient.Factory defaultClientFactory;
 
-  private final URL remoteServer;
-  private final HttpClient client;
-  private final Map<String, CommandInfo> additionalCommands;
-  private CommandCodec<HttpRequest> commandCodec;
-  private ResponseCodec<HttpResponse> responseCodec;
+	private final URL remoteServer;
+	private final HttpClient client;
+	private final Map<String, CommandInfo> additionalCommands;
+	private CommandCodec<HttpRequest> commandCodec;
+	private ResponseCodec<HttpResponse> responseCodec;
 
-  private LocalLogs logs = LocalLogs.getNullLogger();
+	private LocalLogs logs = LocalLogs.getNullLogger();
 
-  public HttpCommandExecutor(URL addressOfRemoteServer) {
-    this(ImmutableMap.of(), addressOfRemoteServer);
-  }
+	public HttpCommandExecutor(URL addressOfRemoteServer) {
+		this(ImmutableMap.of(), addressOfRemoteServer);
+	}
 
-  /**
-   * Creates an {@link HttpCommandExecutor} that supports non-standard
-   * {@code additionalCommands} in addition to the standard.
-   *
-   * @param additionalCommands additional commands to allow the command executor to process
-   * @param addressOfRemoteServer URL of remote end Selenium server
-   */
-  public HttpCommandExecutor(
-      Map<String, CommandInfo> additionalCommands,
-      URL addressOfRemoteServer) {
-    this(additionalCommands, addressOfRemoteServer, getDefaultClientFactory());
-  }
+	/**
+	 * Creates an {@link HttpCommandExecutor} that supports non-standard
+	 * {@code additionalCommands} in addition to the standard.
+	 *
+	 * @param additionalCommands
+	 *            additional commands to allow the command executor to process
+	 * @param addressOfRemoteServer
+	 *            URL of remote end Selenium server
+	 */
+	public HttpCommandExecutor(Map<String, CommandInfo> additionalCommands, URL addressOfRemoteServer) {
+		this(additionalCommands, addressOfRemoteServer, getDefaultClientFactory());
+	}
 
-  public HttpCommandExecutor(
-      Map<String, CommandInfo> additionalCommands,
-      URL addressOfRemoteServer,
-      HttpClient.Factory httpClientFactory) {
-    try {
-      remoteServer = addressOfRemoteServer == null
-          ? new URL(System.getProperty("webdriver.remote.server", "http://localhost:4444/wd/hub"))
-          : addressOfRemoteServer;
-    } catch (MalformedURLException e) {
-      throw new WebDriverException(e);
-    }
+	public HttpCommandExecutor(Map<String, CommandInfo> additionalCommands, URL addressOfRemoteServer,
+			HttpClient.Factory httpClientFactory) {
+		try {
+			remoteServer = addressOfRemoteServer == null
+					? new URL(System.getProperty("webdriver.remote.server", "http://localhost:4444/wd/hub"))
+					: addressOfRemoteServer;
+		} catch (MalformedURLException e) {
+			throw new WebDriverException(e);
+		}
 
-    this.additionalCommands = additionalCommands;
-    this.client = httpClientFactory.createClient(remoteServer);
-  }
+		this.additionalCommands = additionalCommands;
+		this.client = httpClientFactory.createClient(remoteServer);
+	}
 
-  private static synchronized HttpClient.Factory getDefaultClientFactory() {
-    if (defaultClientFactory == null) {
-      defaultClientFactory = new ApacheHttpClient.Factory();
-    }
-    return defaultClientFactory;
-  }
+	private static synchronized HttpClient.Factory getDefaultClientFactory() {
+		if (defaultClientFactory == null) {
+			defaultClientFactory = new ApacheHttpClient.Factory();
+		}
+		return defaultClientFactory;
+	}
 
-  /**
-   * It may be useful to extend the commands understood by this {@code HttpCommandExecutor} at run
-   * time, and this can be achieved via this method. Note, this is protected, and expected usage is
-   * for subclasses only to call this.
-   *
-   * @param commandName The name of the command to use.
-   * @param info CommandInfo for the command name provided
-   */
-  protected void defineCommand(String commandName, CommandInfo info) {
-    checkNotNull(commandName);
-    checkNotNull(info);
-    commandCodec.defineCommand(commandName, info.getMethod(), info.getUrl());
-  }
+	/**
+	 * It may be useful to extend the commands understood by this
+	 * {@code HttpCommandExecutor} at run time, and this can be achieved via
+	 * this method. Note, this is protected, and expected usage is for
+	 * subclasses only to call this.
+	 *
+	 * @param commandName
+	 *            The name of the command to use.
+	 * @param info
+	 *            CommandInfo for the command name provided
+	 */
+	protected void defineCommand(String commandName, CommandInfo info) {
+		checkNotNull(commandName);
+		checkNotNull(info);
+		commandCodec.defineCommand(commandName, info.getMethod(), info.getUrl());
+	}
 
-  public void setLocalLogs(LocalLogs logs) {
-    this.logs = logs;
-  }
+	public void setLocalLogs(LocalLogs logs) {
+		this.logs = logs;
+	}
 
-  private void log(String logType, LogEntry entry) {
-    logs.addEntry(logType, entry);
-  }
+	private void log(String logType, LogEntry entry) {
+		logs.addEntry(logType, entry);
+	}
 
-  public URL getAddressOfRemoteServer() {
-    return remoteServer;
-  }
+	public URL getAddressOfRemoteServer() {
+		return remoteServer;
+	}
 
-  public Response execute(Command command) throws IOException {
-	  System.out.println("==command.getSessionId()===  "+command.getSessionId()+"   "+command.getName());
-    if (command.getSessionId() == null) {
-      if (QUIT.equals(command.getName())) {
-        return new Response();
-      }
-      if (!GET_ALL_SESSIONS.equals(command.getName())
-          && !NEW_SESSION.equals(command.getName())) {
-        throw new NoSuchSessionException(
-            "Session ID is null. Using WebDriver after calling quit()?");
-      }
-    }
+	public Response execute(Command command) throws IOException {
+		System.out.println("==command.getSessionId()===  " + command.getSessionId() + "   " + command.getName());
+		if (command.getSessionId() == null) {
+			if (QUIT.equals(command.getName())) {
+				return new Response();
+			}
+			if (!GET_ALL_SESSIONS.equals(command.getName()) && !NEW_SESSION.equals(command.getName())) {
+				throw new NoSuchSessionException("Session ID is null. Using WebDriver after calling quit()?");
+			}
+		}
 
-    if (NEW_SESSION.equals(command.getName())) {
-      if (commandCodec != null) {
-        throw new SessionNotCreatedException("Session already exists");
-      }
-      ProtocolHandshake handshake = new ProtocolHandshake();
-      log(LogType.PROFILER, new HttpProfilerLogEntry(command.getName(), true));
-      ProtocolHandshake.Result result = handshake.createSession(client, command);
-      Dialect dialect = result.getDialect();
-      commandCodec = dialect.getCommandCodec();
-      for (Map.Entry<String, CommandInfo> entry : additionalCommands.entrySet()) {
-        defineCommand(entry.getKey(), entry.getValue());
-      }
-      responseCodec = dialect.getResponseCodec();
-      log(LogType.PROFILER, new HttpProfilerLogEntry(command.getName(), false));
-      return result.createResponse();
-    }
+		if (NEW_SESSION.equals(command.getName())) {
+			if (commandCodec != null) {
+				throw new SessionNotCreatedException("Session already exists");
+			}
+			ProtocolHandshake handshake = new ProtocolHandshake();
+			log(LogType.PROFILER, new HttpProfilerLogEntry(command.getName(), true));
+			ProtocolHandshake.Result result = handshake.createSession(client, command);
+			Dialect dialect = result.getDialect();
+			commandCodec = dialect.getCommandCodec();
+			for (Map.Entry<String, CommandInfo> entry : additionalCommands.entrySet()) {
+				defineCommand(entry.getKey(), entry.getValue());
+			}
+			responseCodec = dialect.getResponseCodec();
+			log(LogType.PROFILER, new HttpProfilerLogEntry(command.getName(), false));
+			return result.createResponse();
+		}
 
-    if (commandCodec == null || responseCodec == null) {
-      throw new WebDriverException(
-        "No command or response codec has been defined. Unable to proceed");
-    }
+		if (commandCodec == null || responseCodec == null) {
+			throw new WebDriverException("No command or response codec has been defined. Unable to proceed");
+		}
 
-    HttpRequest httpRequest = commandCodec.encode(command);
-    try {
-      log(LogType.PROFILER, new HttpProfilerLogEntry(command.getName(), true));
-      System.out.println("==httpRequest===  "+httpRequest.getContentString());
-      System.out.println("==httpRequest===  "+httpRequest.getUri());
-      System.out.println("==httpRequest===  "+httpRequest.getHeader("Content-Length"));
-      HttpResponse httpResponse = client.execute(httpRequest, true);
-      log(LogType.PROFILER, new HttpProfilerLogEntry(command.getName(), false));
+		HttpRequest httpRequest = commandCodec.encode(command);
+		try {
+			log(LogType.PROFILER, new HttpProfilerLogEntry(command.getName(), true));
+			//打印的参数放到postman中可直接请求浏览器
+			System.out.println();
+			System.out.println();
+			System.out.println("======================================================");
+			System.out.println(String.format("==========%s=====================================", command.getName()));
+			System.out.println("======================================================");
+			System.out.println("==ContentString===  " + httpRequest.getContentString());
+			System.out.println("==url===  " + httpRequest.getUri());
+			System.out.println("==Content-Length===  " + httpRequest.getHeader("Content-Length"));
+			System.out.println("======================================================");
+			System.out.println("======================================================");
+			System.out.println();
+			System.out.println();
+			HttpResponse httpResponse = client.execute(httpRequest, true);
 
-      Response response = responseCodec.decode(httpResponse);
-      if (response.getSessionId() == null) {
-        if (httpResponse.getTargetHost() != null) {
-          response.setSessionId(HttpSessionId.getSessionId(httpResponse.getTargetHost()));
-        } else {
-          // Spam in the session id from the request
-          response.setSessionId(command.getSessionId().toString());
-        }
-      }
-      if (QUIT.equals(command.getName())) {
-    	  client.close();
-      }
-      return response;
-    } catch (UnsupportedCommandException e) {
-      if (e.getMessage() == null || "".equals(e.getMessage())) {
-        throw new UnsupportedOperationException(
-            "No information from server. Command name was: " + command.getName(),
-            e.getCause());
-      }
-      throw e;
-    }
-  }
+			Response response = responseCodec.decode(httpResponse);
+			if (response.getSessionId() == null) {
+				if (httpResponse.getTargetHost() != null) {
+					response.setSessionId(HttpSessionId.getSessionId(httpResponse.getTargetHost()));
+				} else {
+					// Spam in the session id from the request
+					response.setSessionId(command.getSessionId().toString());
+				}
+			}
+			if (QUIT.equals(command.getName())) {
+				client.close();
+			}
+			return response;
+		} catch (UnsupportedCommandException e) {
+			if (e.getMessage() == null || "".equals(e.getMessage())) {
+				throw new UnsupportedOperationException(
+						"No information from server. Command name was: " + command.getName(), e.getCause());
+			}
+			throw e;
+		}
+	}
 }

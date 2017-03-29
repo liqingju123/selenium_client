@@ -63,7 +63,6 @@ public class ApacheHttpClient implements org.openqa.selenium.remote.http.HttpCli
     // Some machines claim "localhost.localdomain" is the same as "localhost".
     // This assumption is not always true.
     String host = url.getHost().replace(".localdomain", "");
-    System.out.println("======  "+url.getPort()+"   "+url.getProtocol());
     this.targetHost = new HttpHost(host, url.getPort(), url.getProtocol());
   }
 
@@ -77,7 +76,6 @@ public class ApacheHttpClient implements org.openqa.selenium.remote.http.HttpCli
       // Skip content length as it is implicitly set when the message entity is set below.
       if (!"Content-Length".equalsIgnoreCase(name)) {
         for (String value : request.getHeaders(name)) {
-        	System.out.println(name+"   "+value);
           httpMethod.addHeader(name, value);
         }
       }
@@ -244,7 +242,6 @@ public class ApacheHttpClient implements org.openqa.selenium.remote.http.HttpCli
       } else {
         client = clientFactory.getHttpClient();
       }
-      System.out.println("apacheHttpClient=====  "+url);
       return new ApacheHttpClient(client, url);
     }
 
